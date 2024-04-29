@@ -22,10 +22,7 @@ use ramfs::RamFs;
 use sync::LazyInit;
 use vfscore::{FileSystem, VfsResult};
 
-use crate::{
-    dentry::{dentry_init, DentryNode},
-    fatfs_shim::Fat32FileSystem,
-};
+use crate::dentry::{dentry_init, DentryNode};
 
 #[macro_use]
 extern crate alloc;
@@ -33,6 +30,9 @@ extern crate alloc;
 extern crate logging;
 
 pub mod dentry;
+#[cfg(root_fs = "ext4")]
+mod ext4_shim;
+#[cfg(root_fs = "fat32")]
 mod fatfs_shim;
 pub mod pipe;
 
@@ -72,10 +72,14 @@ pub fn init() {
     // TODO: Identify the filesystem at the device.
     let mut filesystems: Vec<(Arc<dyn FileSystem>, &str)> = Vec::new();
     if get_blk_devices().len() > 0 {
-        filesystems.push((Fat32FileSystem::new(0), "/"));
+        #[cfg(root_fs = "fat32")]
+        filesystems.push((fatfs_shim::Fat32FileSystem::new(0), "/"));
+        #[cfg(root_fs = "ext4")]
+        filesystems.push((ext4_shim::Ext4FileSystem::new(0), "/"));
     } else {
         filesystems.push((RamFs::new(), "/"));
     }
+    info!("mount rootfs end, rootfs: {}", filesystems[0].0.name());
     filesystems.push((build_devfs(&filesystems), "/dev"));
     filesystems.push((RamFs::new(), "/tmp"));
     filesystems.push((RamFs::new(), "/dev/shm"));

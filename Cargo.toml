@@ -17,7 +17,10 @@ procfs = { git = "https://github.com/Byte-OS/procfs.git" }
 frame_allocator = { git = "https://github.com/Byte-OS/bit_frame_allocator.git" }
 arch = { git = "https://github.com/Byte-OS/arch.git" }
 
-[dependencies.fatfs]
+[target.'cfg(root_fs = "ext4")'.dependencies]
+lwext4_rust = { git = "https://github.com/elliott10/lwext4_rust.git"}
+
+[target.'cfg(root_fs = "fat32")'.dependencies.fatfs]
 git = "https://github.com/byte-os/rust-fatfs.git"
 # rev = "a3a834e"
 default-features = false

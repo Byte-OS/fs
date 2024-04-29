@@ -12,11 +12,6 @@ use vfscore::{
     VfsResult,
 };
 
-pub trait DiskOperation {
-    fn read_block(index: usize, buf: &mut [u8]);
-    fn write_block(index: usize, data: &[u8]);
-}
-
 pub struct Fat32FileSystem {
     inner: fatfs::FileSystem<DiskCursor, NullTimeProvider, LossyOemCpConverter>,
 }
@@ -404,9 +399,7 @@ impl fatfs::Read for DiskCursor {
             let rlen = (buf.len() / 512) * 512;
             assert!(rlen % 0x200 == 0);
             // 如果不用同一个数组 会导致读取数据的时候出现问题
-            let mut data = vec![0u8; rlen];
-            device.read_blocks(self.sector as usize, &mut data);
-            buf[..rlen].copy_from_slice(&data);
+            device.read_blocks(self.sector as usize, buf);
             rlen
         };
 
