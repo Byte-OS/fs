@@ -15,7 +15,6 @@ devfs = { git = "https://github.com/Byte-OS/devfs.git" }
 ramfs = { git = "https://github.com/Byte-OS/ramfs.git" }
 procfs = { git = "https://github.com/Byte-OS/procfs.git" }
 frame_allocator = { git = "https://github.com/Byte-OS/bit_frame_allocator.git" }
-arch = { git = "https://github.com/Byte-OS/arch.git" }
 
 [target.'cfg(root_fs = "ext4")'.dependencies]
 lwext4_rust = { git = "https://github.com/elliott10/lwext4_rust.git"}
