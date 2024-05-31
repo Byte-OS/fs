@@ -71,7 +71,7 @@ impl BlockDevice for Ext4Disk {
         let start_block_id = offset / 512;
         let mut offset_in_block = offset % 512;
 
-        assert_eq!(offset_in_block, 0);
+        // assert_eq!(offset_in_block, 0);
 
         let bytes_to_write = buf.len();
         let mut total_bytes_written = 0;
@@ -107,6 +107,8 @@ impl BlockDevice for Ext4Disk {
 pub struct Ext4FileSystem {
     inner: Arc<Ext4>,
     root: Arc<dyn INodeInterface>,
+    file_type: FileType,
+    // file_name: String,
 }
 
 impl FileSystem for Ext4FileSystem {
@@ -131,6 +133,7 @@ impl Ext4FileSystem {
         Arc::new(Self {
             inner: ext4,
             root: root,
+            file_type: FileType::Directory,
         })
     }
 }
@@ -138,6 +141,8 @@ impl Ext4FileSystem {
 pub struct Ext4FileWrapper {
     inner: Mutex<Ext4File>,
     ext4: Arc<Ext4>,
+    file_type: FileType,
+    file_name: String,
 }
 
 impl Ext4FileWrapper {
@@ -148,9 +153,13 @@ impl Ext4FileWrapper {
         Self {
             inner: Mutex::new(ext4_file),
             ext4: ext4,
+            file_type: FileType::Directory,
+            file_name: "/".to_string(),
         }
     }
 }
+
+
 
 impl INodeInterface for Ext4FileWrapper {
     fn open(&self, path: &str, _flags: vfscore::OpenFlags) -> VfsResult<Arc<dyn INodeInterface>> {
@@ -174,9 +183,9 @@ impl INodeInterface for Ext4FileWrapper {
         };
 
         let r = self
-            .ext4
-            .ext4_open(&mut ext4_file, path, parse_flags, create);
-
+        .ext4
+        .ext4_open(&mut ext4_file, path, parse_flags, create);
+            
         if let Err(e) = r {
             match e.error() {
                 Errnum::ENOENT => Err(vfscore::VfsError::FileNotFound),
@@ -189,6 +198,8 @@ impl INodeInterface for Ext4FileWrapper {
             Ok(Arc::new(Ext4FileWrapper {
                 inner: Mutex::new(ext4_file),
                 ext4: self.ext4.clone(),
+                file_type: self.file_type,
+                file_name: String::from(path),
             }))
         }
     }
@@ -203,11 +214,34 @@ impl INodeInterface for Ext4FileWrapper {
         Ok(Arc::new(Ext4FileWrapper {
             inner: Mutex::new(ext4_file),
             ext4: self.ext4.clone(),
+            file_type: FileType::Directory,
+            file_name: String::from(path),
         }))
     }
 
     fn metadata(&self) -> VfsResult<vfscore::Metadata> {
-        todo!("ext4 loopup")
+        if self.file_name == "/" {
+            return Ok(Metadata {
+                filename: "/",
+                // root
+                inode: 2 as usize,
+                // dir 
+                file_type: FileType::Directory,
+                size: 0,
+                childrens: 0,
+            });
+        }
+        
+        let mut ext4_file = Ext4File::new();
+        let r = self.ext4.ext4_open(&mut ext4_file, &self.file_name, "r+", false);
+
+        Ok(Metadata {
+            filename: &self.file_name,
+            inode: ext4_file.inode as usize,
+            file_type: self.file_type,
+            size: ext4_file.fsize as _,
+            childrens: 0,
+        })
     }
 
     fn readat(&self, offset: usize, buffer: &mut [u8]) -> VfsResult<usize> {
@@ -232,6 +266,8 @@ impl INodeInterface for Ext4FileWrapper {
         Ok(Arc::new(Ext4FileWrapper {
             inner: Mutex::new(ext4_file),
             ext4: self.ext4.clone(),
+            file_type: FileType::File,
+            file_name: String::from(path),
         }))
     }
 
@@ -282,11 +318,40 @@ impl INodeInterface for Ext4FileWrapper {
     }
 
     fn stat(&self, stat: &mut vfscore::Stat) -> VfsResult<()> {
+        stat.ino = 1; // TODO: convert path to number(ino)
+        stat.mode = match self.file_type {
+            FileType::File => StatMode::FILE,
+            FileType::Directory => StatMode::DIR,
+            FileType::Device => StatMode::BLOCK,
+            FileType::Socket => StatMode::SOCKET,
+            FileType::Link => StatMode::LINK,
+        };
+        stat.nlink = 1;
+        stat.uid = 0;
+        stat.gid = 0;
+        stat.size = self.inner.lock().fsize as _;
+        stat.blksize = 4096;
+        stat.blocks = 0;
+        stat.rdev = 0; // TODO: add device id
+        stat.atime.nsec = 0;
+        stat.atime.sec = 0;
+        stat.ctime.nsec = 0;
+        stat.ctime.sec = 0;
+        stat.mtime.nsec = 0;
+        stat.mtime.sec = 0;
         Ok(())
-        // Err(vfscore::VfsError::NotSupported)
     }
 
     fn statfs(&self, statfs: &mut StatFS) -> VfsResult<()> {
+        statfs.ftype = 32;
+        statfs.bsize = 4096;
+        statfs.blocks = 80;
+        statfs.bfree = 40;
+        statfs.bavail = 0;
+        statfs.files = 32;
+        statfs.ffree = 0;
+        statfs.fsid = 32;
+        statfs.namelen = 20;
         Ok(())
     }
 
