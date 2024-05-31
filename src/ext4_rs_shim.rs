@@ -244,17 +244,17 @@ impl INodeInterface for Ext4FileWrapper {
         let mut entries = Vec::new();
 
         for i in v.iter() {
-            let file_type = map_ext4_type(i.inner.file_type);
+            let file_type = map_ext4_type(unsafe{DirEntryType::from_bits(i.inner.inode_type).unwrap()});
 
             let entry = DirEntry {
-                name: i.get_name(),
-                inode: i.inode,
-                file_type: ile_type,
+                filename: i.get_name(),
+                len: i.entry_len as usize,
+                file_type: file_type,
             };
 
-            v.push(entry);
+            entries.push(entry);
         }
-        Ok(v)
+        Ok(entries)
     }
 
     fn lookup(&self, _name: &str) -> VfsResult<Arc<dyn INodeInterface>> {
@@ -295,13 +295,14 @@ impl INodeInterface for Ext4FileWrapper {
     }
 }
 
-pub fn map_ext4_type(value: u8) -> FileType {
+pub fn map_ext4_type(value: DirEntryType) -> FileType {
     match value {
         DirEntryType::EXT4_DE_REG_FILE => FileType::File,
         DirEntryType::EXT4_DE_DIR => FileType::Directory,
-        DirEntryType::EXT4_DE_CHRDEV => FileType::File,
-        DirEntryType::EXT4_DE_BLKDEV => FileType::File,
-        DirEntryType::EXT4_DE_SOCK => FileType::File,
-        DirEntryType::EXT4_DE_SYMLINK => FileType::LINK,
+        DirEntryType::EXT4_DE_CHRDEV => FileType::Device,
+        DirEntryType::EXT4_DE_BLKDEV => FileType::Device,
+        DirEntryType::EXT4_DE_SOCK => FileType::Socket,
+        DirEntryType::EXT4_DE_SYMLINK => FileType::Link,
+        _ => FileType::File,
     }
 }
