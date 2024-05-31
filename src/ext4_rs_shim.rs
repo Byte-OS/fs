@@ -179,7 +179,7 @@ impl INodeInterface for Ext4FileWrapper {
             OpenFlags::O_RDWR => parse_flags = "r+",
             OpenFlags::O_RDWR | OpenFlags::O_CREAT | OpenFlags::O_TRUNC => parse_flags = "w+",
             OpenFlags::O_RDWR | OpenFlags::O_CREAT | OpenFlags::O_APPEND => parse_flags = "a+",
-            _ => unreachable!(),
+            _ => parse_flags = "r+",
         };
 
         let r = self
@@ -340,7 +340,7 @@ impl INodeInterface for Ext4FileWrapper {
         stat.uid = 0;
         stat.gid = 0;
         stat.size = self.inner.lock().fsize as _;
-        stat.blksize = 512;
+        stat.blksize = 4096;
         stat.blocks = 0;
         stat.rdev = 0; // TODO: add device id
         stat.atime.nsec = 0;
