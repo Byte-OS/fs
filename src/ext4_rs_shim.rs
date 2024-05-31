@@ -245,7 +245,17 @@ impl INodeInterface for Ext4FileWrapper {
     }
 
     fn readat(&self, offset: usize, buffer: &mut [u8]) -> VfsResult<usize> {
-        todo!("ext4 loopup")
+
+        let mut ext4_file = self.inner.lock();
+
+        ext4_file.fpos = offset;
+
+        let read_len = buffer.len();
+        let mut read_cnt = 0;
+
+        let r = self.ext4.ext4_file_read(&mut ext4_file, buffer, read_len , &mut read_cnt);
+
+        Ok(read_len)
     }
 
     fn writeat(&self, offset: usize, buffer: &[u8]) -> VfsResult<usize> {
@@ -330,7 +340,7 @@ impl INodeInterface for Ext4FileWrapper {
         stat.uid = 0;
         stat.gid = 0;
         stat.size = self.inner.lock().fsize as _;
-        stat.blksize = 4096;
+        stat.blksize = 512;
         stat.blocks = 0;
         stat.rdev = 0; // TODO: add device id
         stat.atime.nsec = 0;
