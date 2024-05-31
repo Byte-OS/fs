@@ -246,6 +246,8 @@ impl INodeInterface for Ext4FileWrapper {
 
     fn readat(&self, offset: usize, buffer: &mut [u8]) -> VfsResult<usize> {
 
+        log::error!("file {:?} read at offset {:x?} file size {:x?}", self.file_name, offset, self.inner.lock().fsize);
+
         let mut ext4_file = self.inner.lock();
 
         ext4_file.fpos = offset;
@@ -255,7 +257,14 @@ impl INodeInterface for Ext4FileWrapper {
 
         let r = self.ext4.ext4_file_read(&mut ext4_file, buffer, read_len , &mut read_cnt);
 
-        Ok(read_len)
+        if let Err(e) = r {
+            match e.error() {
+                Errnum::EINVAL => Err(vfscore::VfsError::InvalidInput),
+                _ => Err(vfscore::VfsError::UnexpectedEof),
+            }
+        } else {
+            Ok(read_len)
+        }
     }
 
     fn writeat(&self, offset: usize, buffer: &[u8]) -> VfsResult<usize> {
