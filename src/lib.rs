@@ -30,10 +30,14 @@ extern crate alloc;
 extern crate logging;
 
 pub mod dentry;
+
 #[cfg(root_fs = "ext4")]
 mod ext4_shim;
 #[cfg(root_fs = "fat32")]
 mod fatfs_shim;
+#[cfg(root_fs = "ext4_rs")]
+mod ext4_rs_shim;
+
 pub mod pipe;
 
 pub type File = Arc<dyn INodeInterface>;
@@ -76,6 +80,9 @@ pub fn init() {
         filesystems.push((fatfs_shim::Fat32FileSystem::new(0), "/"));
         #[cfg(root_fs = "ext4")]
         filesystems.push((ext4_shim::Ext4FileSystem::new(0), "/"));
+        #[cfg(root_fs = "ext4_rs")]
+        filesystems.push((ext4_rs_shim::Ext4FileSystem::new(0), "/"));
+
     } else {
         filesystems.push((RamFs::new(), "/"));
     }
