@@ -7,9 +7,15 @@ use alloc::{
     vec::Vec,
 };
 use devices::get_blk_device;
-use lwext4_rust::{bindings::{O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY}, Ext4BlockWrapper, Ext4File, InodeTypes, KernelDevOp};
+use lwext4_rust::{
+    bindings::{O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY},
+    Ext4BlockWrapper, Ext4File, InodeTypes, KernelDevOp,
+};
 use sync::Mutex;
-use vfscore::{DirEntry, FileSystem, FileType, INodeInterface, Metadata, OpenFlags, StatFS, StatMode, TimeSpec, VfsError, VfsResult};
+use vfscore::{
+    DirEntry, FileSystem, FileType, INodeInterface, Metadata, OpenFlags, StatFS, StatMode,
+    TimeSpec, VfsError, VfsResult,
+};
 
 const BLOCK_SIZE: usize = 0x200;
 
@@ -205,14 +211,17 @@ impl Ext4FileSystem {
         let inner = Ext4BlockWrapper::<Ext4DiskWrapper>::new(disk)
             .expect("failed to initialize EXT4 filesystem");
         let root = Arc::new(Ext4FileWrapper::new("/", InodeTypes::EXT4_DE_DIR));
-        Arc::new(Self { _inner: inner, root })
+        Arc::new(Self {
+            _inner: inner,
+            root,
+        })
     }
 }
 
 fn map_ext4_err(err: i32) -> VfsError {
     match err {
         2 => VfsError::FileNotFound,
-        _ => VfsError::NotSupported
+        _ => VfsError::NotSupported,
     }
 }
 
@@ -386,8 +395,9 @@ impl INodeInterface for Ext4FileWrapper {
     fn touch(&self, name: &str) -> VfsResult<Arc<dyn INodeInterface>> {
         let fpath = self.path_deal_with(name);
         info!("touch {fpath}");
-        let mut file = self.inner.lock();  
-        file.file_open(&fpath, O_WRONLY | O_CREAT | O_TRUNC).map_err(map_ext4_err)?;
+        let mut file = self.inner.lock();
+        file.file_open(&fpath, O_WRONLY | O_CREAT | O_TRUNC)
+            .map_err(map_ext4_err)?;
         file.file_close().map_err(map_ext4_err)?;
         Ok(Arc::new(Ext4FileWrapper {
             filename: name.to_string(),
@@ -443,13 +453,18 @@ impl INodeInterface for Ext4FileWrapper {
                 inner: Mutex::new(Ext4File::new(&fpath, InodeTypes::EXT4_DE_REG_FILE)),
             }))
         } else {
-            info!("open file: {}  {}", fpath, flags.contains(OpenFlags::O_CREAT));
+            info!(
+                "open file: {}  {}",
+                fpath,
+                flags.contains(OpenFlags::O_CREAT)
+            );
             if flags.contains(OpenFlags::O_CREAT) {
                 if flags.contains(OpenFlags::O_DIRECTORY) {
                     drop(file);
                     self.mkdir(name)
                 } else {
-                    file.file_open(&fpath, O_WRONLY | O_CREAT | O_TRUNC).map_err(map_ext4_err)?;
+                    file.file_open(&fpath, O_WRONLY | O_CREAT | O_TRUNC)
+                        .map_err(map_ext4_err)?;
                     file.file_close().map_err(map_ext4_err)?;
                     Ok(Arc::new(Ext4FileWrapper {
                         filename: name.to_string(),
@@ -493,7 +508,8 @@ impl INodeInterface for Ext4FileWrapper {
             file.dir_rm(&fpath)
         } else {
             file.file_remove(&fpath)
-        }.map_err(map_ext4_err)?;
+        }
+        .map_err(map_ext4_err)?;
         Ok(())
     }
 

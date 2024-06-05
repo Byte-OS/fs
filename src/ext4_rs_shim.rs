@@ -1,7 +1,4 @@
-use core::iter::zip;
-
 use alloc::{
-    ffi::CString,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
@@ -11,7 +8,7 @@ use devices::get_blk_device;
 use sync::Mutex;
 use vfscore::{
     DirEntry, FileSystem, FileType, INodeInterface, Metadata, OpenFlags, StatFS, StatMode,
-    TimeSpec, VfsError, VfsResult,
+    TimeSpec, VfsResult,
 };
 
 use ext4_rs::*;
@@ -32,7 +29,6 @@ impl Ext4Disk {
 
 impl BlockDevice for Ext4Disk {
     fn read_offset(&self, offset: usize) -> Vec<u8> {
-        // log::info!("read_offset: {:x?}", offset);
         let mut buf = vec![0; BLOCK_SIZE];
         let device = get_blk_device(self.device_id).unwrap();
 
@@ -45,7 +41,6 @@ impl BlockDevice for Ext4Disk {
             let current_block_id = start_block_id + i;
 
             device.read_blocks(current_block_id, &mut data);
-
             let bytes_to_copy = if total_bytes_read == 0 {
                 512 - offset_in_block
             } else {
@@ -104,6 +99,8 @@ impl BlockDevice for Ext4Disk {
     }
 }
 
+/// TODO: use inner fields AND Fix some warnings.
+#[allow(dead_code)]
 pub struct Ext4FileSystem {
     inner: Arc<Ext4>,
     root: Arc<dyn INodeInterface>,
@@ -132,7 +129,7 @@ impl Ext4FileSystem {
         let root = Arc::new(Ext4FileWrapper::load_root(ext4.clone()));
         Arc::new(Self {
             inner: ext4,
-            root: root,
+            root,
             file_type: FileType::Directory,
         })
     }
@@ -148,44 +145,39 @@ pub struct Ext4FileWrapper {
 impl Ext4FileWrapper {
     fn load_root(ext4: Arc<Ext4>) -> Self {
         let mut ext4_file = Ext4File::new();
-        let r = ext4.ext4_open(&mut ext4_file, "/", "r", false);
+        let _ = ext4.ext4_open(&mut ext4_file, "/", "r", false);
 
         Self {
             inner: Mutex::new(ext4_file),
-            ext4: ext4,
+            ext4,
             file_type: FileType::Directory,
             file_name: "/".to_string(),
         }
     }
 }
 
-
-
 impl INodeInterface for Ext4FileWrapper {
-    fn open(&self, path: &str, _flags: vfscore::OpenFlags) -> VfsResult<Arc<dyn INodeInterface>> {
+    fn open(&self, path: &str, flags: vfscore::OpenFlags) -> VfsResult<Arc<dyn INodeInterface>> {
         let mut ext4_file = Ext4File::new();
 
         let mut create = false;
 
-        if _flags.contains(OpenFlags::O_CREAT) {
+        if flags.contains(OpenFlags::O_CREAT) {
             create = true;
         };
+        // let mut parse_flags: &str;
+        // match flags {
+        //     OpenFlags::O_RDONLY => parse_flags = "r",
+        //     OpenFlags::O_WRONLY | OpenFlags::O_CREAT | OpenFlags::O_TRUNC => parse_flags = "w",
+        //     OpenFlags::O_WRONLY | OpenFlags::O_CREAT | OpenFlags::O_APPEND => parse_flags = "a",
+        //     OpenFlags::O_RDWR => parse_flags = "r+",
+        //     OpenFlags::O_RDWR | OpenFlags::O_CREAT | OpenFlags::O_TRUNC => parse_flags = "w+",
+        //     OpenFlags::O_RDWR | OpenFlags::O_CREAT | OpenFlags::O_APPEND => parse_flags = "a+",
+        //     _ => parse_flags = "r+",
+        // };
 
-        let mut parse_flags: &str;
-        match _flags {
-            OpenFlags::O_RDONLY => parse_flags = "r",
-            OpenFlags::O_WRONLY | OpenFlags::O_CREAT | OpenFlags::O_TRUNC => parse_flags = "w",
-            OpenFlags::O_WRONLY | OpenFlags::O_CREAT | OpenFlags::O_APPEND => parse_flags = "a",
-            OpenFlags::O_RDWR => parse_flags = "r+",
-            OpenFlags::O_RDWR | OpenFlags::O_CREAT | OpenFlags::O_TRUNC => parse_flags = "w+",
-            OpenFlags::O_RDWR | OpenFlags::O_CREAT | OpenFlags::O_APPEND => parse_flags = "a+",
-            _ => parse_flags = "r+",
-        };
+        let r = self.ext4.ext4_open(&mut ext4_file, path, "r+", create);
 
-        let r = self
-        .ext4
-        .ext4_open(&mut ext4_file, path, parse_flags, create);
-            
         if let Err(e) = r {
             match e.error() {
                 Errnum::ENOENT => Err(vfscore::VfsError::FileNotFound),
@@ -205,11 +197,10 @@ impl INodeInterface for Ext4FileWrapper {
     }
 
     fn mkdir(&self, path: &str) -> VfsResult<Arc<dyn INodeInterface>> {
-        let r = self.ext4.ext4_dir_mk(path);
-
+        let _ = self.ext4.ext4_dir_mk(path);
         let mut ext4_file = Ext4File::new();
 
-        let r = self.ext4.ext4_open(&mut ext4_file, path, "w", false);
+        let _ = self.ext4.ext4_open(&mut ext4_file, path, "w", false);
 
         Ok(Arc::new(Ext4FileWrapper {
             inner: Mutex::new(ext4_file),
@@ -225,15 +216,17 @@ impl INodeInterface for Ext4FileWrapper {
                 filename: "/",
                 // root
                 inode: 2 as usize,
-                // dir 
+                // dir
                 file_type: FileType::Directory,
                 size: 0,
                 childrens: 0,
             });
         }
-        
+
         let mut ext4_file = Ext4File::new();
-        let r = self.ext4.ext4_open(&mut ext4_file, &self.file_name, "r+", false);
+        let _ = self
+            .ext4
+            .ext4_open(&mut ext4_file, &self.file_name, "r+", false);
 
         Ok(Metadata {
             filename: &self.file_name,
@@ -245,9 +238,6 @@ impl INodeInterface for Ext4FileWrapper {
     }
 
     fn readat(&self, offset: usize, buffer: &mut [u8]) -> VfsResult<usize> {
-
-        log::error!("file {:?} read at offset {:x?} file size {:x?}", self.file_name, offset, self.inner.lock().fsize);
-
         let mut ext4_file = self.inner.lock();
 
         ext4_file.fpos = offset;
@@ -255,7 +245,9 @@ impl INodeInterface for Ext4FileWrapper {
         let read_len = buffer.len();
         let mut read_cnt = 0;
 
-        let r = self.ext4.ext4_file_read(&mut ext4_file, buffer, read_len , &mut read_cnt);
+        let r = self
+            .ext4
+            .ext4_file_read(&mut ext4_file, buffer, read_len, &mut read_cnt);
 
         if let Err(e) = r {
             match e.error() {
@@ -263,25 +255,25 @@ impl INodeInterface for Ext4FileWrapper {
                 _ => Err(vfscore::VfsError::UnexpectedEof),
             }
         } else {
-            Ok(read_len)
+            Ok(ext4_file.fpos - offset)
         }
     }
 
-    fn writeat(&self, offset: usize, buffer: &[u8]) -> VfsResult<usize> {
+    fn writeat(&self, _offset: usize, _buffer: &[u8]) -> VfsResult<usize> {
         todo!("ext4 loopup")
     }
 
-    fn rmdir(&self, name: &str) -> VfsResult<()> {
+    fn rmdir(&self, _name: &str) -> VfsResult<()> {
         todo!("ext4 loopup")
     }
 
-    fn remove(&self, name: &str) -> VfsResult<()> {
+    fn remove(&self, _name: &str) -> VfsResult<()> {
         todo!("ext4 loopup")
     }
 
     fn touch(&self, path: &str) -> VfsResult<Arc<dyn INodeInterface>> {
         let mut ext4_file = Ext4File::new();
-        let r = self.ext4.ext4_open(&mut ext4_file, path, "w+", true);
+        let _ = self.ext4.ext4_open(&mut ext4_file, path, "w+", true);
         Ok(Arc::new(Ext4FileWrapper {
             inner: Mutex::new(ext4_file),
             ext4: self.ext4.clone(),
@@ -299,12 +291,13 @@ impl INodeInterface for Ext4FileWrapper {
         let mut entries = Vec::new();
 
         for i in v.iter() {
-            let file_type = map_ext4_type(unsafe{DirEntryType::from_bits(i.inner.inode_type).unwrap()});
+            let file_type =
+                map_ext4_type(unsafe { DirEntryType::from_bits(i.inner.inode_type).unwrap() });
 
             let entry = DirEntry {
                 filename: i.get_name(),
                 len: i.entry_len as usize,
-                file_type: file_type,
+                file_type,
             };
 
             entries.push(entry);
@@ -316,7 +309,7 @@ impl INodeInterface for Ext4FileWrapper {
         todo!("ext4 loopup")
     }
 
-    fn truncate(&self, size: usize) -> VfsResult<()> {
+    fn truncate(&self, _size: usize) -> VfsResult<()> {
         Ok(())
     }
 
@@ -332,7 +325,7 @@ impl INodeInterface for Ext4FileWrapper {
         Err(vfscore::VfsError::NotSupported)
     }
 
-    fn unlink(&self, name: &str) -> VfsResult<()> {
+    fn unlink(&self, _name: &str) -> VfsResult<()> {
         Ok(())
     }
 
