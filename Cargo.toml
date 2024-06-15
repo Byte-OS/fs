@@ -17,7 +17,7 @@ procfs = { git = "https://github.com/Byte-OS/procfs.git" }
 frame_allocator = { git = "https://github.com/Byte-OS/bit_frame_allocator.git" }
 
 [target.'cfg(root_fs = "ext4_rs")'.dependencies]
-ext4_rs = { git = "https://github.com/yuoo655/ext4_rs.git"}
+ext4_rs = { git = "https://github.com/yuoo655/ext4_rs.git", rev="04286c7"}
 
 [target.'cfg(root_fs = "ext4")'.dependencies]
 lwext4_rust = { git = "https://github.com/elliott10/lwext4_rust.git"}

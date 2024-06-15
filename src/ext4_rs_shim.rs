@@ -284,8 +284,10 @@ impl INodeInterface for Ext4FileWrapper {
 
     fn read_dir(&self) -> VfsResult<Vec<DirEntry>> {
         let ext4file = self.inner.lock();
-        let inode_num = ext4file.inode;
-
+        let mut inode_num = ext4file.inode;
+        if inode_num == 0 && self.file_name == "/" {
+            inode_num = 2;
+        }
         let v: Vec<Ext4DirEntry> = self.ext4.read_dir_entry(inode_num as _);
 
         let mut entries = Vec::new();
